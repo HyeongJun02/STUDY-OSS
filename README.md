@@ -44,3 +44,6 @@ Torvalds, software engineer, inventor of the Linux operating system
 > 3. “Everybody should learn to program a computer, because it teaches you how to
 think.” - Steve Jobs, former CEO and creator of Apple
 
+동: 동아대학교는
+아: 아주
+대: 대단하다.
