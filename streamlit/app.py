@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import os
 from math import radians, sin, cos, sqrt, atan2
 import folium
 from folium.plugins import MarkerCluster
@@ -41,28 +42,45 @@ def haversine(coord1, coord2):
 # 1) 데이터 로드 함수
 @st.cache_data
 def load_data(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path, encoding='cp949')
+    # 앱 디렉터리 기준 절대경로로 변환
+    base_dir = os.path.dirname(__file__)
+    full_path = os.path.join(base_dir, path)
+    df = pd.read_csv(full_path, encoding='cp949')
     df = df[df['응급실운영여부'] == 1]
-    df = df.rename(columns={'병원위도':'lat','병원경도':'lon','기관명':'name','주소':'address','병원분류명':'type'})
+    df = df.rename(columns={
+        '병원위도':'lat', '병원경도':'lon',
+        '기관명':'name', '주소':'address', '병원분류명':'type'
+    })
     return df[['name','address','type','lat','lon','대표전화1','응급실전화']]
 
-# 2) UI 타이틀
-st.title("🚑 서울시 응급실 서비스 🚑")
+# 2) UI 타이틀 및 WebApp 소개
+st.title("🚑 서울시 응급실 위치 정보 서비스 v2.0 🚑")
+st.markdown("""
+**WebApp 소개**
+
+이 서비스는 서울시 열린데이터광장에서 제공하는 응급실 위치·운영 정보를 기반으로, 사용자가 직접 **위치**와 **반경**, **분류**를 설정하여 주변 응급실을 실시간으로 탐색할 수 있는 웹 애플리케이션입니다.
+- 반경 내 응급실 분포를 **통계 차트**, **카드**, **테이블**, **지도** 4가지 시각화로 제공
+- **다운로드 버튼**으로 필터링 결과를 CSV로 저장 가능
+- **카드형 레이아웃**으로 상위 3개 응급실을 강조하여 긴급 상황에도 빠르게 파악
+- **클러스터 지도**와 **맞춤형 마커 색상**으로 다양한 정보(주소·거리·분류·전화번호·검색 링크)를 직관적으로 제공
+""", unsafe_allow_html=True)
 
 # 3) 데이터 로드
-df = load_data("./seoul_emer.csv")
+df = load_data("seoul_emer.csv")
 
 # 4) 사이드바 설정
 st.sidebar.header("⚙️ 설정")
 lat = st.sidebar.number_input("위도", value=37.5665, format="%.6f")
 lon = st.sidebar.number_input("경도", value=126.9780, format="%.6f")
 user_coord = (lat, lon)
-types = st.sidebar.multiselect("응급실 분류", options=df['type'].unique(), default=list(df['type'].unique()))
+types = st.sidebar.multiselect(
+    "응급실 분류", options=df['type'].unique(), default=list(df['type'].unique())
+)
 radius = st.sidebar.slider("반경 (km)", 1.0, 20.0, 5.0, 0.5)
 tiles = st.sidebar.selectbox("지도 스타일", ['OpenStreetMap','CartoDB positron'])
 
 # 5) 거리 계산 및 필터링
-df['distance'] = df.apply(lambda r: haversine(user_coord,(r.lat,r.lon)), axis=1)
+df['distance'] = df.apply(lambda r: haversine(user_coord, (r.lat, r.lon)), axis=1)
 filtered = df[(df['distance'] <= radius) & (df['type'].isin(types))]
 
 # 6) 통계 차트
@@ -72,7 +90,7 @@ st.sidebar.bar_chart(count_by_type.set_index('type'))
 
 # 7) 카드형 최근접 3개
 st.subheader("🥇 반경 내 가장 가까운 3개 응급실")
-nears = filtered.nsmallest(3,'distance').reset_index(drop=True)
+nears = filtered.nsmallest(3, 'distance').reset_index(drop=True)
 cards = st.columns(3)
 for i, row in nears.iterrows():
     with cards[i]:
@@ -88,24 +106,40 @@ for i, row in nears.iterrows():
 
 # 8) 상세 정보 테이블
 st.subheader("📋 상세 응급실 정보")
-st.download_button("📥 CSV 다운로드", filtered.to_csv(index=False), file_name='filtered_emer.csv')
-disp = filtered.rename(columns={'name':'병원 이름','address':'주소','type':'분류','distance':'거리(km)','대표전화1':'대표전화','응급실전화':'응급실전화'})
-st.dataframe(disp[['병원 이름','주소','분류','거리(km)','대표전화','응급실전화']], height=300)
+st.download_button(
+    "📥 CSV 다운로드", filtered.to_csv(index=False), file_name='filtered_emer.csv'
+)
+disp = filtered.rename(columns={
+    'name':'병원 이름', 'address':'주소', 'type':'분류',
+    'distance':'거리(km)', '대표전화1':'대표전화', '응급실전화':'응급실전화'
+})
+st.dataframe(
+    disp[['병원 이름','주소','분류','거리(km)','대표전화','응급실전화']], height=300
+)
 
 # 9) 클러스터 지도 및 범례
+st.subheader("📍 응급실 위치 지도")
 m = folium.Map(location=user_coord, tiles=tiles, zoom_start=12)
 cluster = MarkerCluster().add_to(m)
 legend = folium.Element(
-    '<div style="position: fixed; bottom: 50px; left: 50px; background: white; padding: 8px; border:1px solid #ccc; font-size:0.85rem;">'
+    '<div style="position: fixed; bottom: 50px; left: 50px; '
+    'background: white; padding: 8px; border:1px solid #ccc; font-size:0.85rem;">'
     '<strong>분류 색상</strong><br>red: 상급종합<br>blue: 종합<br>green: 병원<br>purple: 의원</div>'
 )
 m.get_root().html.add_child(legend)
 icon_map = {'상급종합':'red','종합':'blue','병원':'green','의원':'purple'}
 for _, row in filtered.iterrows():
-    folium.Marker([row.lat,row.lon],popup=f"{row['name']} ({row['distance']:.2f} km)",icon=folium.Icon(color=icon_map.get(row['type'],'gray'),prefix='glyphicon',icon='plus-sign')).add_to(cluster)
+    folium.Marker(
+        [row.lat, row.lon],
+        popup=f"{row['name']} ({row['distance']:.2f} km)",
+        icon=folium.Icon(color=icon_map.get(row['type'], 'gray'), prefix='glyphicon', icon='plus-sign')
+    ).add_to(cluster)
 st_folium(m, width=800, height=500)
 
 # 10) Footer
 from pandas import Timestamp
 uptime = Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
-st.markdown(f"<div style='text-align:center; color:#888;'>🚀 Updated: {uptime}</div>", unsafe_allow_html=True)
+st.markdown(
+    f"<div style='text-align:center; color:#888;'>🚀 Updated: {uptime}</div>",
+    unsafe_allow_html=True
+)
