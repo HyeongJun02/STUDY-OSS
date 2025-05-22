@@ -54,16 +54,7 @@ def load_data(path: str) -> pd.DataFrame:
     return df[['name','address','type','lat','lon','대표전화1','응급실전화']]
 
 # 2) UI 타이틀 및 WebApp 소개
-st.title("🚑 서울시 응급실 위치 정보 서비스 v2.0 🚑")
-st.markdown("""
-**WebApp 소개**
-
-이 서비스는 서울시 열린데이터광장에서 제공하는 응급실 위치·운영 정보를 기반으로, 사용자가 직접 **위치**와 **반경**, **분류**를 설정하여 주변 응급실을 실시간으로 탐색할 수 있는 웹 애플리케이션입니다.
-- 반경 내 응급실 분포를 **통계 차트**, **카드**, **테이블**, **지도** 4가지 시각화로 제공
-- **다운로드 버튼**으로 필터링 결과를 CSV로 저장 가능
-- **카드형 레이아웃**으로 상위 3개 응급실을 강조하여 긴급 상황에도 빠르게 파악
-- **클러스터 지도**와 **맞춤형 마커 색상**으로 다양한 정보(주소·거리·분류·전화번호·검색 링크)를 직관적으로 제공
-""", unsafe_allow_html=True)
+st.title("🚑 서울시 응급실 서비스 🚑")
 
 # 3) 데이터 로드
 df = load_data("seoul_emer.csv")
@@ -89,7 +80,7 @@ count_by_type = filtered.groupby('type').size().reset_index(name='count')
 st.sidebar.bar_chart(count_by_type.set_index('type'))
 
 # 7) 카드형 최근접 3개
-st.subheader("🥇 반경 내 가장 가까운 3개 응급실")
+st.subheader("🚨 반경 내 가장 가까운 3개 응급실")
 nears = filtered.nsmallest(3, 'distance').reset_index(drop=True)
 cards = st.columns(3)
 for i, row in nears.iterrows():
